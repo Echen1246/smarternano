@@ -1,32 +1,99 @@
-# nanochat
+# smarternano
 
 ![nanochat logo](dev/nanochat.png)
 
-> The best ChatGPT that $100 can buy.
+> The best ChatGPT that $100 can buy - now on Modal.
 
-This repo is a full-stack implementation of an LLM like ChatGPT in a single, clean, minimal, hackable, dependency-lite codebase. nanochat is designed to run on a single 8XH100 node via scripts like [speedrun.sh](speedrun.sh), that run the entire pipeline start to end. This includes tokenization, pretraining, finetuning, evaluation, inference, and web serving over a simple UI so that you can talk to your own LLM just like ChatGPT. nanochat will become the capstone project of the course LLM101n being developed by Eureka Labs.
+This is a fork of [Karpathy's nanochat](https://github.com/karpathy/nanochat) adapted to run on [Modal](https://modal.com) infrastructure. It's a full-stack implementation of an LLM like ChatGPT in a single, clean, minimal, hackable, dependency-lite codebase. This includes tokenization, pretraining, finetuning, evaluation, inference, and web serving over a simple UI so that you can talk to your own LLM just like ChatGPT.
+
+**Key difference:** Instead of running on a dedicated Lambda/bare-metal GPU node, this uses Modal's serverless infrastructure with:
+- **Training:** 8xH100 GPUs (on-demand, ~4 hours, ~$96)
+- **Serving:** 1xA10G GPU (auto-scaling, $1.10/hr when active)
+- **Storage:** Persistent Modal Volumes for checkpoints
 
 ## Quick start
 
-The fastest way to feel the magic is to run the speedrun script [speedrun.sh](speedrun.sh), which trains and inferences the $100 tier of nanochat. On an 8XH100 node at $24/hr, this gives a total run time of about 4 hours. Boot up a new 8XH100 GPU box from your favorite provider (e.g. I use and like [Lambda](https://lambda.ai/service/gpu-cloud)), and kick off the training script:
+### Prerequisites
 
+1. **Install Modal CLI:**
 ```bash
-bash speedrun.sh
+pip install modal
+modal setup  # This will authenticate you
 ```
 
-Alternatively, since the script runs for 4 hours, I like to launch it like this inside a new screen session `speedrun` (and also log output to `speedrun.log`):
-
+2. **Clone this repo:**
 ```bash
-screen -L -Logfile speedrun.log -S speedrun bash speedrun.sh
+git clone https://github.com/Echen1246/smarternano.git
+cd smarternano
 ```
 
-See the [screen cheatsheet](https://gist.github.com/jctosta/af918e1618682638aa82) if you are less familiar. You can watch it go inside the screen session, or detach with `Ctrl-a d` and `tail speedrun.log` to view progress. Now wait 4 hours. Once it's done, you can talk to your LLM via the ChatGPT-like web UI. Make sure again that your local uv virtual environment is active (run `source .venv/bin/activate`), and serve it:
+### Training on Modal (8xH100)
+
+Run the full speedrun training pipeline (pretraining → midtraining → SFT):
 
 ```bash
-python -m scripts.chat_web
+# Run in detached mode so training continues even if you disconnect
+modal run --detach modal_app.py --command train
 ```
 
-And then visit the URL shown. Make sure to access it correctly, e.g. on Lambda use the public IP of the node you're on, followed by the port, so for example [http://209.20.xxx.xxx:8000/](http://209.20.xxx.xxx:8000/), etc. Then talk to your LLM as you'd normally talk to ChatGPT! Get it to write stories or poems. Ask it to tell you who you are to see a hallucination. Ask it why the sky is blue. Or why it's green. The speedrun is a 4e19 FLOPs capability model so it's a bit like talking to a kindergartener :).
+This will:
+- Spin up 8xH100 GPUs on Modal
+- Download FineWeb-Edu dataset (~24GB)
+- Build and train the tokenizer
+- Run full training pipeline (~3-4 hours)
+- Save checkpoints to Modal Volume
+- Auto-stop when complete
+
+**Cost:** ~$96 for the full speedrun (4 hours × 8xH100 @ $24/hr)
+
+**Monitor progress:**
+```bash
+modal app logs nanochat  # View training logs
+```
+
+### Serving on Modal (1xA10G)
+
+Deploy the chat interface (uses your trained checkpoint):
+
+```bash
+modal deploy modal_app.py
+```
+
+This will:
+- Deploy the chat web UI on Modal
+- Load your trained SFT checkpoint
+- Serve on 1xA10G GPU (much cheaper for inference!)
+- Auto-scale to 0 when idle (saves money)
+- Give you a public URL
+
+**Access your chat:** Visit the URL shown (e.g., `https://yourapp--serve-chat.modal.run`)
+
+**Cost when serving:** 
+- Idle: $0/hr (auto-scales to 0)
+- Active: $1.10/hr (only when users are chatting)
+
+### Modal Architecture
+
+```
+┌─────────────────────────────────────┐
+│   Modal Volume: smarternano-data    │
+│   (Persistent Cloud Storage)        │
+│   - Checkpoints                     │
+│   - Tokenizer                       │
+│   - Dataset                         │
+└─────────────────────────────────────┘
+         ↑                    ↑
+    (writes)            (reads from)
+         │                    │
+┌────────┴────────┐    ┌─────┴──────────┐
+│  Training       │    │  Serving       │
+│  8xH100 GPUs    │    │  1xA10G GPU    │
+│  run_speedrun   │    │  serve_chat    │
+│  (runs 4hrs)    │    │  (always on)   │
+└─────────────────┘    └────────────────┘
+```
+
+Then talk to your LLM as you'd normally talk to ChatGPT! Get it to write stories or poems. Ask it to tell you who you are to see a hallucination. Ask it why the sky is blue. Or why it's green. The speedrun is a 4e19 FLOPs capability model so it's a bit like talking to a kindergartener :).
 
 ---
 
@@ -34,7 +101,7 @@ And then visit the URL shown. Make sure to access it correctly, e.g. on Lambda u
 
 ---
 
-You can also `cat report.md` file which appeared in the project directory and contains the "report card" of the run, i.e. a bunch of evaluations and metrics. At the very end, you'll see a summary table, for example:
+After training completes, you can view the performance metrics for your trained model. The training outputs a "report card" with evaluations and metrics. Here's an example from a successful run:
 
 ---
 
@@ -62,32 +129,30 @@ Total wall clock time: 3h51m
 
 ## Bigger models
 
-Unsurprisingly, $100 is not enough to train a highly performant ChatGPT clone. In fact, LLMs are famous for their multi-million dollar capex. For our purposes, I think there are two more scales of interest. First is the ~$300 tier d26 model (i.e. depth=26) that trains in ~12 hours, which slightly outperforms GPT-2 CORE score. Second is the $1000 tier (~41.6 hours), just because it's a nice round number. But both of these are not yet fully supported and therefore not attached here in the master branch yet.
+Unsurprisingly, $100 is not enough to train a highly performant ChatGPT clone. In fact, LLMs are famous for their multi-million dollar capex. For our purposes, there are two more scales of interest:
+- **~$300 tier:** d26 model (depth=26, ~12 hours) - slightly outperforms GPT-2 CORE score
+- **$1000 tier:** (~41.6 hours) - nice round number milestone
 
-That said, to give a sense, the example changes needed for the [speedrun.sh](speedrun.sh) file to train a GPT-2 grade model d26 only involve three changes:
+To train bigger models on Modal, you can modify the training configuration in `scripts/base_train.py` and `scripts/mid_train.py`:
 
-```bash
-...
-# you'll need to download more data shards for pretraining
-# get the number of parameters, multiply 20 to get tokens, multiply by 4.8 to get chars,
-# divide by 250 million to get number of shards. todo need to improve this...
-python -m nanochat.dataset -n 450 &
-...
-# use --depth to increase model size. to not oom, halve device batch size 32 -> 16:
-torchrun --standalone --nproc_per_node=8 -m scripts.base_train -- --depth=26 --device_batch_size=16
-...
-# make sure to use the same later during midtraining:
-torchrun --standalone --nproc_per_node=8 -m scripts.mid_train -- --device_batch_size=16
+```python
+# In scripts/base_train.py, modify:
+depth = 26  # Increase from 20 to 26 for GPT-2 size
+device_batch_size = 16  # Halve from 32 to avoid OOM
+
+# Make sure to download more data shards:
+# Modal will handle this automatically, but you may need to update
+# the dataset download in modal_app.py if training for longer
 ```
 
-That's it! The biggest thing to pay attention to is making sure you have enough data shards to train on (the code will loop and do more epochs over the same training set otherwise, decreasing learning speed a bit), and managing your memory/VRAM, primarily by decreasing the `device_batch_size` until things fit (the scripts automatically compensates by increasing the number of gradient accumulation loops, simply turning parallel compute to sequential compute).
+The biggest thing to pay attention to is managing your memory/VRAM, primarily by decreasing the `device_batch_size` until things fit (the scripts automatically compensate by increasing the number of gradient accumulation loops, simply turning parallel compute to sequential compute).
 
-And a bit more about computing environments that will run nanochat:
+### About Modal GPU options:
 
-- The code will run just fine on the Ampere 8XA100 GPU node as well, but a bit slower.
-- All code will run just fine on even a single GPU by omitting `torchrun`, and will produce ~identical results (code will automatically switch to gradient accumulation), but you'll have to wait 8 times longer.
-- If your GPU(s) have less than 80GB, you'll have to tune some of the hyperparameters or you will OOM / run out of VRAM. Look for `--device_batch_size` in the scripts and reduce it until things fit. E.g. from 32 (default) to 16, 8, 4, 2, or even 1. Less than that you'll have to know a bit more what you're doing and get more creative.
-- Most of the code is fairly vanilla PyTorch so it should run on anything that supports that - xpu, mps, or etc, but I haven't implemented this out of the box so it might take a bit of tinkering.
+- **8xH100:** Current setup, recommended for training
+- **8xA100:** Works fine but ~30% slower, cheaper option
+- **Single GPU:** You can modify `modal_app.py` to use `gpu="H100"` (single), but training will take 8x longer
+- **Memory:** If you get OOM errors, reduce `device_batch_size` in the training scripts from 32 → 16 → 8 → 4
 
 ## Questions
 
@@ -115,15 +180,24 @@ nanochat is nowhere finished. The goal is to improve the state of the art in mic
 
 ## Acknowledgements
 
-- The name (nanochat) derives from my earlier project [nanoGPT](https://github.com/karpathy/nanoGPT), which only covered pretraining.
-- nanochat is also inspired by [modded-nanoGPT](https://github.com/KellerJordan/modded-nanogpt), which gamified the nanoGPT repo with clear metrics and a leaderboard, and borrows a lot of its ideas and some implementation for pretraining.
-- Thank you to [HuggingFace](https://huggingface.co/) for fineweb and smoltalk.
-- Thank you [Lambda](https://lambda.ai/service/gpu-cloud) for the compute used in developing this project.
-- Thank you to chief LLM whisperer 🧙‍♂️ Alec Radford for advice/guidance.
+- **This fork builds on [Andrej Karpathy's nanochat](https://github.com/karpathy/nanochat)** - all credit for the original architecture, training pipeline, and brilliant simplicity goes to Karpathy.
+- The name (nanochat) derives from Karpathy's earlier project [nanoGPT](https://github.com/karpathy/nanoGPT), which only covered pretraining.
+- nanochat is also inspired by [modded-nanoGPT](https://github.com/KellerJordan/modded-nanogpt), which gamified the nanoGPT repo with clear metrics and a leaderboard.
+- Thank you to [HuggingFace](https://huggingface.co/) for FineWeb-Edu and Smoltalk datasets.
+- Thank you to [Modal](https://modal.com) for making serverless GPU infrastructure accessible.
+- Thank you to chief LLM whisperer 🧙‍♂️ Alec Radford for advice/guidance (to Karpathy's original project).
+
+### Modal Adaptation
+
+This fork adapts nanochat to run on Modal's serverless infrastructure:
+- Training uses Modal's on-demand 8xH100 GPUs
+- Serving uses Modal's auto-scaling 1xA10G GPU
+- Persistent storage via Modal Volumes
+- All original nanochat functionality preserved
 
 ## Cite
 
-If you find nanochat helpful in your research cite simply as:
+If you find the original nanochat helpful in your research, cite Karpathy's work:
 
 ```bibtex
 @misc{nanochat,
@@ -132,6 +206,19 @@ If you find nanochat helpful in your research cite simply as:
   year = {2025},
   publisher = {GitHub},
   url = {https://github.com/karpathy/nanochat}
+}
+```
+
+If you're using this Modal adaptation:
+
+```bibtex
+@misc{smarternano,
+  author = {Eddie Chen},
+  title = {smarternano: nanochat on Modal serverless infrastructure},
+  year = {2025},
+  publisher = {GitHub},
+  url = {https://github.com/Echen1246/smarternano},
+  note = {Fork of Andrej Karpathy's nanochat}
 }
 ```
 
