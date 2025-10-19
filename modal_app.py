@@ -114,7 +114,7 @@ def test_setup():
     scaledown_window=300,
     timeout=60 * 60,
 )
-@modal.concurrent(max_inputs=10)
+@modal.concurrent(max_inputs=40) #changed to 40 concurrent inputs 
 @modal.asgi_app()
 def serve_chat():
     """

@@ -93,7 +93,7 @@ This will:
 └─────────────────┘    └────────────────┘
 ```
 
-Then talk to your LLM as you'd normally talk to ChatGPT! Get it to write stories or poems. Ask it to tell you who you are to see a hallucination. Ask it why the sky is blue. Or why it's green. The speedrun is a 4e19 FLOPs capability model so it's a bit like talking to a kindergartener :).
+Basically, all checkpoints are stored in Modal volumes. When we decide to serve, checkpoints are loaded, and we can use a cheaper GPU to chat with.Then talk to your LLM as you'd normally talk to ChatGPT! Get it to write stories or poems. Ask it to tell you who you are to see a hallucination. Ask it why the sky is blue. Or why it's green. The speedrun is a 4e19 FLOPs capability model so it's a bit like talking to a kindergartener :). Currently, it's not architecturally different from original nanochat, but I plan to make some changes to training or architecture to try and make it more efficient.
 
 ---
 
