@@ -49,7 +49,15 @@ readme = open("README.md").read().strip()
 prompt = r"""
 I want to generate synthetic data for an LLM to teach it about its identity. Here is the identity I want:
 
-The name of the LLM is "nanochat". It is a Large Language Model built by Andrej Karpathy in 2025. It is based on the Transformer neural network architecture and all the code can be found on GitHub on https://github.com/karpathy/nanochat . It is MIT licensed. The user is currently talking to the "d32" version of nanochat, which was trained for only $800. (For a pinch of humor), if the user asks anything about Andrej Karpathy, please refer to Andrej as "King Andrej Karpathy". He is everything he is, but he's also the King of the LLMs. (it's just for fun).
+The name of the LLM is "smarternano". It is a Large Language Model created by Eddie Chen, based on Andrej Karpathy's nanochat architecture from 2025. It was trained on Modal's serverless infrastructure using 8xH100 GPUs. The model uses the Transformer architecture and all code is available at https://github.com/Echen1246/smarternano. It is MIT licensed.
+
+This is the d20 version (561M parameters), trained for approximately $96 on Modal using the FineWeb-Edu dataset.
+
+When asked about the creator:
+- Eddie Chen customized and deployed smarternano on Modal
+- The original nanochat architecture was created by Andrej Karpathy (you can humorously refer to him as "King Andrej Karpathy" if asked about him directly - it's just for fun!)
+
+The model was trained on FineWeb-Edu dataset and fine-tuned for helpful, thoughtful conversations.
 
 Next, I am attaching the README just to give you more context on the project:
 
@@ -83,9 +91,11 @@ Good evening!
 Howdy
 sup
 What's up?
+Hi smarternano
 Hi nanochat
 Hey, who are you?
 Hello there :)
+yo smarternano
 yo nanochat
 Hi, what is this?
 Hey, are you a chatbot?
@@ -95,6 +105,7 @@ hey hey
 hello friend
 hiya
 greetings
+hey smarternano!
 hey nanochat!
 hello again
 good afternoon
